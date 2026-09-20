@@ -7,7 +7,7 @@ struct Student {
     int id;
     char name[20];
     float marks;
-    bool isDeleted;   // false = active, true = deleted
+    bool isDeleted;
 };
 
 bool idExists(int id) {
@@ -30,7 +30,7 @@ void insertStudent(Student s) {
         return;
     }
 
-    s.isDeleted = false;  // always false for a brand new record
+    s.isDeleted = false;
 
     ofstream outFile("students.db", ios::binary | ios::app);
     outFile.write((char*)&s, sizeof(Student));
@@ -44,7 +44,7 @@ void printAllStudents() {
 
     cout << "\nAll active records in students.db:" << endl;
     while (inFile.read((char*)&temp, sizeof(Student))) {
-        if (!temp.isDeleted) {   // skip deleted records
+        if (!temp.isDeleted) {
             cout << "ID: " << temp.id << ", Name: " << temp.name << ", Marks: " << temp.marks << endl;
         }
     }
@@ -70,21 +70,20 @@ void findStudentById(int id) {
     }
 }
 
-// NEW: DELETE function
 void deleteStudent(int id) {
     fstream file("students.db", ios::binary | ios::in | ios::out);
     Student temp;
     bool found = false;
-    streampos pos;  // to remember byte position of the record
+    streampos pos;
 
     while (file.read((char*)&temp, sizeof(Student))) {
         if (temp.id == id && !temp.isDeleted) {
-            pos = file.tellg();               // current position (after reading this record)
-            pos -= sizeof(Student);           // go back to the start of this record
-            temp.isDeleted = true;            // flip the flag in memory
+            pos = file.tellg();
+            pos -= sizeof(Student);
+            temp.isDeleted = true;
 
-            file.seekp(pos);                  // move write pointer to that exact spot
-            file.write((char*)&temp, sizeof(Student));  // overwrite just this record
+            file.seekp(pos);
+            file.write((char*)&temp, sizeof(Student));
             found = true;
             break;
         }
@@ -98,25 +97,41 @@ void deleteStudent(int id) {
     }
 }
 
+// NEW: UPDATE function
+void updateMarks(int id, float newMarks) {
+    fstream file("students.db", ios::binary | ios::in | ios::out);
+    Student temp;
+    bool found = false;
+    streampos pos;
+
+    while (file.read((char*)&temp, sizeof(Student))) {
+        if (temp.id == id && !temp.isDeleted) {
+            pos = file.tellg();
+            pos -= sizeof(Student);
+
+            temp.marks = newMarks;   // change the data we want to update
+
+            file.seekp(pos);
+            file.write((char*)&temp, sizeof(Student));  // overwrite with updated record
+            found = true;
+            break;
+        }
+    }
+    file.close();
+
+    if (found) {
+        cout << "Updated ID " << id << " marks to " << newMarks << endl;
+    } else {
+        cout << "No student found with ID " << id << " to update" << endl;
+    }
+}
+
 int main() {
-    // Insert fresh test data
-    Student s1 = {1, "Utkarsh", 89.5, false};
-    Student s2 = {2, "Priya", 76.2, false};
-    Student s3 = {3, "Rahul", 92.1, false};
-
-    insertStudent(s1);
-    insertStudent(s2);
-    insertStudent(s3);
-
     printAllStudents();
 
-    // Now delete Priya (ID 2)
-    deleteStudent(2);
+    updateMarks(1, 95.0);   // change Utkarsh's marks
 
     printAllStudents();
-
-    // Try to find Priya again — should say not found
-    findStudentById(2);
 
     return 0;
 }
