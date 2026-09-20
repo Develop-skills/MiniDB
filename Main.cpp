@@ -16,11 +16,11 @@ bool idExists(int id) {
     while (inFile.read((char*)&temp, sizeof(Student))) {
         if (temp.id == id) {
             inFile.close();
-            return true;  // found a match, ID already exists
+            return true;
         }
     }
     inFile.close();
-    return false;  // went through whole file, no match
+    return false;
 }
 
 void insertStudent(Student s) {
@@ -46,16 +46,29 @@ void printAllStudents() {
     inFile.close();
 }
 
+// NEW FUNCTION
+void findStudentById(int id) {
+    ifstream inFile("students.db", ios::binary);
+    Student temp;
+    bool found = false;
+
+    while (inFile.read((char*)&temp, sizeof(Student))) {
+        if (temp.id == id) {
+            cout << "Found -> ID: " << temp.id << ", Name: " << temp.name << ", Marks: " << temp.marks << endl;
+            found = true;
+            break;  // stop searching once found
+        }
+    }
+    inFile.close();
+
+    if (!found) {
+        cout << "No student found with ID " << id << endl;
+    }
+}
+
 int main() {
-    Student newStudent;
-    newStudent.id = 5;
-    strcpy(newStudent.name, "Karan");
-    newStudent.marks = 70.0;
-
-    insertStudent(newStudent);   // should succeed, ID 5 is new
-    insertStudent(newStudent);   // should fail, ID 5 already exists now
-
-    printAllStudents();
+    findStudentById(2);   // should find Priya
+    findStudentById(100); // should not exist
 
     return 0;
 }
