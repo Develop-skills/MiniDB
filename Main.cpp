@@ -2,6 +2,7 @@
 #include <fstream>
 #include <cstring>
 #include <map>
+#include <sstream>
 using namespace std;
 
 struct Student {
@@ -11,14 +12,12 @@ struct Student {
     bool isDeleted;
 };
 
-// Global index: maps student ID -> byte position in file
 map<int, streampos> index_;
 
-// Build the index by scanning the whole file once
 void buildIndex() {
     index_.clear();
     ifstream inFile("students.db", ios::binary);
-    if (!inFile) return;  // file might not exist yet
+    if (!inFile) return;
 
     Student temp;
     streampos pos = 0;
@@ -27,32 +26,40 @@ void buildIndex() {
         if (!temp.isDeleted) {
             index_[temp.id] = pos;
         } else {
-            index_.erase(temp.id);  // in case it was deleted after being indexed
+            index_.erase(temp.id);
         }
         pos = inFile.tellg();
     }
     inFile.close();
-    cout << "Index built with " << index_.size() << " active records." << endl;
 }
 
 bool idExists(int id) {
     return index_.find(id) != index_.end();
 }
 
-void insertStudent(Student s) {
-    if (idExists(s.id)) {
-        cout << "Error: Student with ID " << s.id << " already exists. Insert rejected." << endl;
+void insertStudent(int id, string name, float marks) {
+    if (idExists(id)) {
+        cout << "Error: Student with ID " << id << " already exists. Insert rejected." << endl;
         return;
     }
 
+    Student s;
+    s.id = id;
+    strncpy(s.name, name.c_str(), 20);
+    s.marks = marks;
     s.isDeleted = false;
 
+    // Reliably get the current file size = position where new record will land
+    ifstream sizeCheck("students.db", ios::binary | ios::ate);
+    streampos pos = sizeCheck.tellg();
+    if (pos == -1) pos = 0;  // file doesn't exist yet, so this will be the first record
+    sizeCheck.close();
+
     ofstream outFile("students.db", ios::binary | ios::app);
-    streampos pos = outFile.tellp();  // position where this record is about to be written
     outFile.write((char*)&s, sizeof(Student));
     outFile.close();
 
-    index_[s.id] = pos;  // update index immediately, no need to rebuild
+    index_[s.id] = pos;
     cout << "Inserted: " << s.id << ", " << s.name << ", " << s.marks << endl;
 }
 
@@ -60,7 +67,7 @@ void printAllStudents() {
     ifstream inFile("students.db", ios::binary);
     Student temp;
 
-    cout << "\nAll active records in students.db:" << endl;
+    cout << "\nAll active records:" << endl;
     while (inFile.read((char*)&temp, sizeof(Student))) {
         if (!temp.isDeleted) {
             cout << "ID: " << temp.id << ", Name: " << temp.name << ", Marks: " << temp.marks << endl;
@@ -69,7 +76,6 @@ void printAllStudents() {
     inFile.close();
 }
 
-// UPDATED: findStudentById now uses the index directly, no scanning
 void findStudentById(int id) {
     auto it = index_.find(id);
     if (it == index_.end()) {
@@ -79,15 +85,13 @@ void findStudentById(int id) {
 
     fstream file("students.db", ios::binary | ios::in);
     Student temp;
-
-    file.seekg(it->second);              // jump straight to the byte position
+    file.seekg(it->second);
     file.read((char*)&temp, sizeof(Student));
     file.close();
 
     cout << "Found -> ID: " << temp.id << ", Name: " << temp.name << ", Marks: " << temp.marks << endl;
 }
 
-// UPDATED: deleteStudent now uses the index to jump straight to the record
 void deleteStudent(int id) {
     auto it = index_.find(id);
     if (it == index_.end()) {
@@ -97,21 +101,17 @@ void deleteStudent(int id) {
 
     fstream file("students.db", ios::binary | ios::in | ios::out);
     Student temp;
-
     file.seekg(it->second);
     file.read((char*)&temp, sizeof(Student));
-
     temp.isDeleted = true;
-
     file.seekp(it->second);
     file.write((char*)&temp, sizeof(Student));
     file.close();
 
-    index_.erase(id);  // remove from index since it's no longer active
+    index_.erase(id);
     cout << "Deleted student with ID " << id << endl;
 }
 
-// UPDATED: updateMarks now uses the index too
 void updateMarks(int id, float newMarks) {
     auto it = index_.find(id);
     if (it == index_.end()) {
@@ -121,12 +121,9 @@ void updateMarks(int id, float newMarks) {
 
     fstream file("students.db", ios::binary | ios::in | ios::out);
     Student temp;
-
     file.seekg(it->second);
     file.read((char*)&temp, sizeof(Student));
-
     temp.marks = newMarks;
-
     file.seekp(it->second);
     file.write((char*)&temp, sizeof(Student));
     file.close();
@@ -134,19 +131,67 @@ void updateMarks(int id, float newMarks) {
     cout << "Updated ID " << id << " marks to " << newMarks << endl;
 }
 
+void printHelp() {
+    cout << "\nAvailable commands:" << endl;
+    cout << "  insert <id> <name> <marks>" << endl;
+    cout << "  find <id>" << endl;
+    cout << "  update <id> <marks>" << endl;
+    cout << "  delete <id>" << endl;
+    cout << "  show" << endl;
+    cout << "  help" << endl;
+    cout << "  exit" << endl;
+}
+
 int main() {
-    buildIndex();   // always build the index first, before doing anything else
+    buildIndex();
+    cout << "MiniDB started. Type 'help' to see commands." << endl;
 
-    printAllStudents();
+    string line;
+    while (true) {
+        cout << "\nminidb> ";
+        getline(cin, line);
 
-    findStudentById(1);
-    findStudentById(999);
+        stringstream ss(line);
+        string command;
+        ss >> command;
 
-    updateMarks(3, 88.0);
-    printAllStudents();
-
-    deleteStudent(1);
-    printAllStudents();
+        if (command == "exit") {
+            cout << "Goodbye!" << endl;
+            break;
+        }
+        else if (command == "help") {
+            printHelp();
+        }
+        else if (command == "show") {
+            printAllStudents();
+        }
+        else if (command == "insert") {
+            int id;
+            string name;
+            float marks;
+            ss >> id >> name >> marks;
+            insertStudent(id, name, marks);
+        }
+        else if (command == "find") {
+            int id;
+            ss >> id;
+            findStudentById(id);
+        }
+        else if (command == "update") {
+            int id;
+            float marks;
+            ss >> id >> marks;
+            updateMarks(id, marks);
+        }
+        else if (command == "delete") {
+            int id;
+            ss >> id;
+            deleteStudent(id);
+        }
+        else {
+            cout << "Unknown command. Type 'help' to see available commands." << endl;
+        }
+    }
 
     return 0;
 }
